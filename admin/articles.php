@@ -206,8 +206,16 @@ try {
 } catch (Exception $e) {}
 
 $pageTitle = 'Kelola Artikel';
+
+// ✅ BACKUP statistik halaman sebelum sidebar dirender
+// (sidebar.php punya variabel $stats sendiri yang akan menimpa)
+$pageStats = $stats;
+
 include __DIR__ . '/../includes/admin-header.php';
 include __DIR__ . '/../includes/sidebar.php';
+
+// ✅ RESTORE statistik halaman setelah sidebar selesai dirender
+$stats = $pageStats;
 
 // Helper untuk generate URL dengan preserve filters
 function buildArticlesUrl($overrides = []) {
@@ -1107,7 +1115,7 @@ html[data-theme="dark"] .page-btn {
     <div class="articles-header">
         <h2>
             <i class="fas fa-newspaper"></i> Kelola Artikel 
-            <span class="count-badge"><?php echo $stats['total']; ?></span>
+            <span class="count-badge"><?php echo (int)($stats['total'] ?? 0); ?></span>
         </h2>
         <a href="<?php echo url('admin/article-edit.php'); ?>" class="btn-new-article">
             <i class="fas fa-plus"></i> Tulis Artikel Baru
@@ -1119,35 +1127,35 @@ html[data-theme="dark"] .page-btn {
         <a href="<?php echo buildArticlesUrl(['status' => '', 'page' => 1]); ?>" class="stat-card total" style="text-decoration:none;">
             <div class="stat-card-icon"><i class="fas fa-newspaper"></i></div>
             <div class="stat-card-info">
-                <span class="value"><?php echo number_format($stats['total']); ?></span>
+                <span class="value"><?php echo number_format((int)($stats['total'] ?? 0)); ?></span>
                 <span class="label">Total Artikel</span>
             </div>
         </a>
         <a href="<?php echo buildArticlesUrl(['status' => 'published', 'page' => 1]); ?>" class="stat-card published" style="text-decoration:none;">
             <div class="stat-card-icon"><i class="fas fa-check-circle"></i></div>
             <div class="stat-card-info">
-                <span class="value"><?php echo number_format($stats['published']); ?></span>
+                <span class="value"><?php echo number_format((int)($stats['published'] ?? 0)); ?></span>
                 <span class="label">Published</span>
             </div>
         </a>
         <a href="<?php echo buildArticlesUrl(['status' => 'draft', 'page' => 1]); ?>" class="stat-card draft" style="text-decoration:none;">
             <div class="stat-card-icon"><i class="fas fa-file-alt"></i></div>
             <div class="stat-card-info">
-                <span class="value"><?php echo number_format($stats['draft']); ?></span>
+                <span class="value"><?php echo number_format((int)($stats['draft'] ?? 0)); ?></span>
                 <span class="label">Draft</span>
             </div>
         </a>
         <div class="stat-card views">
             <div class="stat-card-icon"><i class="fas fa-eye"></i></div>
             <div class="stat-card-info">
-                <span class="value"><?php echo number_format($stats['total_views']); ?></span>
+                <span class="value"><?php echo number_format((int)($stats['total_views'] ?? 0)); ?></span>
                 <span class="label">Total Views</span>
             </div>
         </div>
         <div class="stat-card comments">
             <div class="stat-card-icon"><i class="fas fa-comments"></i></div>
             <div class="stat-card-info">
-                <span class="value"><?php echo number_format($stats['total_comments']); ?></span>
+                <span class="value"><?php echo number_format((int)($stats['total_comments'] ?? 0)); ?></span>
                 <span class="label">Total Komentar</span>
             </div>
         </div>
