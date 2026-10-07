@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: Oct 07, 2026 at 08:58 AM
+-- Generation Time: Oct 07, 2026 at 12:04 PM
 -- Server version: 5.7.39
 -- PHP Version: 8.2.28
 
@@ -53,6 +53,8 @@ CREATE TABLE `categories` (
   `name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
   `slug` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
   `description` text COLLATE utf8mb4_unicode_ci,
+  `icon` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'fa-tag',
+  `color` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '#3498db',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -60,14 +62,14 @@ CREATE TABLE `categories` (
 -- Dumping data for table `categories`
 --
 
-INSERT INTO `categories` (`id`, `name`, `slug`, `description`, `created_at`) VALUES
-(1, 'Psikologi', 'psikologi', 'Artikel terkait psikologi dan kesehatan mental', '2026-10-07 00:41:08'),
-(2, 'Pendidikan', 'pendidikan', 'Artikel terkait dunia pendidikan', '2026-10-07 00:41:08'),
-(3, 'Teknologi', 'teknologi', 'Artikel terkait teknologi dan IT', '2026-10-07 00:41:08'),
-(4, 'Sains', 'sains', 'Artikel terkait ilmu sains', '2026-10-07 00:41:08'),
-(5, 'Lingkungan', 'lingkungan', 'Artikel terkait isu lingkungan', '2026-10-07 00:41:08'),
-(6, 'Kesehatan', 'kesehatan', 'Artikel terkait kesehatan', '2026-10-07 00:41:08'),
-(7, 'Sosial Budaya', 'sosial-budaya', 'Artikel terkait sosial dan budaya', '2026-10-07 00:41:08');
+INSERT INTO `categories` (`id`, `name`, `slug`, `description`, `icon`, `color`, `created_at`) VALUES
+(1, 'Psikologi', 'psikologi', 'Artikel terkait psikologi dan kesehatan mental', 'fa-tag', '#3498db', '2026-10-07 00:41:08'),
+(2, 'Pendidikan', 'pendidikan', 'Artikel terkait dunia pendidikan', 'fa-tag', '#3498db', '2026-10-07 00:41:08'),
+(3, 'Teknologi', 'teknologi', 'Artikel terkait teknologi dan IT', 'fa-tag', '#3498db', '2026-10-07 00:41:08'),
+(4, 'Sains', 'sains', 'Artikel terkait ilmu sains', 'fa-tag', '#3498db', '2026-10-07 00:41:08'),
+(5, 'Lingkungan', 'lingkungan', 'Artikel terkait isu lingkungan', 'fa-tag', '#3498db', '2026-10-07 00:41:08'),
+(6, 'Kesehatan', 'kesehatan', 'Artikel terkait kesehatan', 'fa-tag', '#3498db', '2026-10-07 00:41:08'),
+(7, 'Sosial Budaya', 'sosial-budaya', 'Artikel terkait sosial dan budaya', 'fa-tag', '#3498db', '2026-10-07 00:41:08');
 
 -- --------------------------------------------------------
 
@@ -81,8 +83,10 @@ CREATE TABLE `comments` (
   `nama` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `email` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `comment` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `parent_id` int(11) DEFAULT '0',
   `status` enum('pending','approved','rejected') COLLATE utf8mb4_unicode_ci DEFAULT 'pending',
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -133,15 +137,16 @@ CREATE TABLE `users` (
   `bio` text COLLATE utf8mb4_unicode_ci,
   `role` enum('admin','dosen') COLLATE utf8mb4_unicode_ci DEFAULT 'dosen',
   `status` enum('active','inactive') COLLATE utf8mb4_unicode_ci DEFAULT 'active',
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`id`, `nama`, `email`, `password`, `nip`, `jabatan`, `prodi`, `foto`, `bio`, `role`, `status`, `created_at`) VALUES
-(1, 'Administrator', 'admin@kampus.ac.id', '$2y$10$0DC6i6IVLkPAZiAZHbYgb.HfqN2QJvAj3gEck32Ggj8l0.0wBeA1u', '198501012010011001', 'Admin Sistem', NULL, 'default.png', NULL, 'admin', 'active', '2026-10-07 00:41:08');
+INSERT INTO `users` (`id`, `nama`, `email`, `password`, `nip`, `jabatan`, `prodi`, `foto`, `bio`, `role`, `status`, `created_at`, `updated_at`) VALUES
+(1, 'Yolis Libman', 'admin@kampus.ac.id', '$2y$10$0DC6i6IVLkPAZiAZHbYgb.HfqN2QJvAj3gEck32Ggj8l0.0wBeA1u', '198501012010011001', 'Admin Sistem', '', 'http://localhost/blog-dosen/assets/uploads/profiles/img_6ac62e7de6e40.png', '', 'admin', 'active', '2026-10-07 00:41:08', '2026-10-07 11:35:25');
 
 --
 -- Indexes for dumped tables
@@ -170,7 +175,8 @@ ALTER TABLE `categories`
 --
 ALTER TABLE `comments`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `article_id` (`article_id`);
+  ADD KEY `article_id` (`article_id`),
+  ADD KEY `idx_status_created` (`status`,`created_at`);
 
 --
 -- Indexes for table `settings`
