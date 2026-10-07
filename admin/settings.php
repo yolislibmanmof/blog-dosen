@@ -11,6 +11,12 @@ if (!isAdmin()) {
 // 💾 HANDLE UPDATE
 // ============================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // ✅ VALIDASI KEAMANAN CSRF
+    if (empty($_POST['csrf_token']) || !verifyCsrfToken($_POST['csrf_token'])) {
+        flash('error', '❌ Sesi keamanan tidak valid. Silakan refresh halaman dan coba lagi.');
+        redirect('admin/settings.php');
+    }
+    
     try {
         $action = $_POST['action'] ?? 'save_general';
         
@@ -94,21 +100,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             
-            // Handle checkbox fields (0/1)
+            // ✅ FIX: Checkbox handling yang lebih aman
             $checkboxFields = ['maintenance_mode', 'allow_registration', 'comment_moderation'];
             foreach ($checkboxFields as $cb) {
                 if (in_array($cb, $fields)) {
-                    // Sudah dihandle di loop di atas dengan value '' (unchecked) atau '1' (checked)
-                    // Tapi perlu fix: checkbox unchecked tidak terkirim di POST
-                }
-            }
-            // Fix untuk checkbox yang tidak terkirim
-            foreach (['maintenance_mode', 'allow_registration', 'comment_moderation'] as $cb) {
-                if (in_array($cb, $fields) && !isset($_POST[$cb])) {
-                    // Cari dan set value ke 0
-                    $idx = array_search($cb, $fields);
-                    if ($idx !== false) {
-                        $params[$idx] = '0';
+                    $fieldIndex = array_search($cb, $fields);
+                    if ($fieldIndex !== false) {
+                        if (!isset($_POST[$cb])) {
+                            $params[$fieldIndex] = '0';
+                        } else {
+                            $params[$fieldIndex] = '1';
+                        }
                     }
                 }
             }
@@ -198,7 +200,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // 📊 LOAD SETTINGS
 // ============================================
 $settings = getSettings();
-$settings = $settings ?: [
+if (!$settings) {
+    $settings = [];
+}
+
+// ✅ DEFAULT VALUES (Fallback jika key tidak ada)
+$defaultSettings = [
     'nama_kampus' => '', 'tagline' => '', 'short_description' => '',
     'email_contact' => '', 'phone' => '', 'address' => '', 'working_hours' => '',
     'facebook' => '', 'twitter' => '', 'instagram' => '', 'youtube' => '',
@@ -211,6 +218,17 @@ $settings = $settings ?: [
     'maintenance_mode' => '0', 'maintenance_message' => '',
     'allow_registration' => '0', 'comment_moderation' => '1', 'posts_per_page' => '12',
 ];
+
+// Gabungkan default dengan data dari database
+$settings = array_merge($defaultSettings, $settings);
+
+// ✅ SANITASI MASSAL: Ubah semua nilai NULL menjadi string kosong ''
+// Ini mencegah error "htmlspecialchars(): Passing null" di PHP 8.1+
+foreach ($settings as $key => $value) {
+    if ($value === null) {
+        $settings[$key] = '';
+    }
+}
 
 // ============================================
 // 📊 SYSTEM INFO
@@ -232,9 +250,8 @@ try {
 // Database size (optional, mungkin butuh privilege)
 $dbSize = 'N/A';
 try {
-    $dbName = '';
-    preg_match('/dbname=([^;]+)/', DB_DSN ?? '', $m);
-    if (isset($m[1])) $dbName = $m[1];
+    // ✅ Ambil nama database langsung dari MySQL
+    $dbName = db()->query("SELECT DATABASE()")->fetchColumn();
     if ($dbName) {
         $stmt = db()->prepare("
             SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS size_mb
@@ -250,10 +267,21 @@ try {
 // Count records
 $recordCounts = ['articles' => 0, 'users' => 0, 'categories' => 0, 'comments' => 0];
 try {
-    $recordCounts['articles'] = (int)db()->query("SELECT COUNT(*) FROM articles")->fetchColumn();
-    $recordCounts['users'] = (int)db()->query("SELECT COUNT(*) FROM users")->fetchColumn();
-    $recordCounts['categories'] = (int)db()->query("SELECT COUNT(*) FROM categories")->fetchColumn();
-    $recordCounts['comments'] = (int)db()->query("SELECT COUNT(*) FROM comments")->fetchColumn();
+    // ✅ Satu query untuk semua counts (lebih efisien)
+    $stmt = db()->query("
+        SELECT 
+            (SELECT COUNT(*) FROM articles) as articles,
+            (SELECT COUNT(*) FROM users) as users,
+            (SELECT COUNT(*) FROM categories) as categories,
+            (SELECT COUNT(*) FROM comments) as comments
+    ");
+    $row = $stmt->fetch();
+    if ($row) {
+        $recordCounts['articles'] = (int)$row['articles'];
+        $recordCounts['users'] = (int)$row['users'];
+        $recordCounts['categories'] = (int)$row['categories'];
+        $recordCounts['comments'] = (int)$row['comments'];
+    }
 } catch (Exception $e) {}
 
 // Logo & Favicon URLs
@@ -1000,6 +1028,7 @@ html[data-theme="dark"] .sys-info-icon {
                 <i class="fas fa-external-link-alt"></i> Lihat Website
             </a>
             <form method="POST" style="display:inline;" onsubmit="return confirmReset(event)">
+                <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="reset_settings">
                 <button type="submit" class="btn-action danger">
                     <i class="fas fa-undo"></i> Reset Default
@@ -1044,6 +1073,7 @@ html[data-theme="dark"] .sys-info-icon {
             <!-- ===== PANEL: GENERAL ===== -->
             <div class="settings-panel active" id="panel-general">
                 <form method="POST" data-form="general">
+                    <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="save_general">
                     <input type="hidden" name="tab" value="general">
                     
@@ -1103,6 +1133,7 @@ html[data-theme="dark"] .sys-info-icon {
             <!-- ===== PANEL: CONTACT ===== -->
             <div class="settings-panel" id="panel-contact">
                 <form method="POST" data-form="contact">
+                    <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="save_contact">
                     <input type="hidden" name="tab" value="contact">
                     
@@ -1160,6 +1191,7 @@ html[data-theme="dark"] .sys-info-icon {
             <!-- ===== PANEL: SOCIAL MEDIA ===== -->
             <div class="settings-panel" id="panel-social">
                 <form method="POST" data-form="social">
+                    <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="save_social">
                     <input type="hidden" name="tab" value="social">
                     
@@ -1260,6 +1292,7 @@ html[data-theme="dark"] .sys-info-icon {
             <!-- ===== PANEL: SEO ===== -->
             <div class="settings-panel" id="panel-seo">
                 <form method="POST" data-form="seo">
+                    <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="save_seo">
                     <input type="hidden" name="tab" value="seo">
                     
@@ -1354,6 +1387,7 @@ html[data-theme="dark"] .sys-info-icon {
             <!-- ===== PANEL: APPEARANCE ===== -->
             <div class="settings-panel" id="panel-appearance">
                 <form method="POST" enctype="multipart/form-data" data-form="appearance">
+                    <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="save_appearance">
                     <input type="hidden" name="tab" value="appearance">
                     
@@ -1495,6 +1529,7 @@ html[data-theme="dark"] .sys-info-icon {
             <!-- ===== PANEL: QUOTE ===== -->
             <div class="settings-panel" id="panel-quote">
                 <form method="POST" data-form="quote">
+                    <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="save_quote">
                     <input type="hidden" name="tab" value="quote">
                     
@@ -1552,6 +1587,7 @@ html[data-theme="dark"] .sys-info-icon {
             <!-- ===== PANEL: ADVANCED ===== -->
             <div class="settings-panel" id="panel-advanced">
                 <form method="POST" data-form="advanced">
+                    <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="save_advanced">
                     <input type="hidden" name="tab" value="advanced">
                     

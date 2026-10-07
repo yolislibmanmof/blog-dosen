@@ -11,7 +11,8 @@ $userId = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 0;
 // ============================================
 // 📊 LIVE STATISTICS (optimal: 3 query saja)
 // ============================================
-$stats = [
+// ✅ RENAMED: $stats -> $sidebarStats (mencegah tabrakan dengan variabel halaman lain)
+$sidebarStats = [
     'total_articles' => 0,
     'published' => 0,
     'drafts' => 0,
@@ -31,10 +32,10 @@ try {
     $stmt->execute([$userId]);
     $as = $stmt->fetch();
     if ($as) {
-        $stats['total_articles'] = (int)$as['total'];
-        $stats['published'] = (int)$as['published'];
-        $stats['drafts'] = (int)$as['drafts'];
-        $stats['total_views'] = (int)$as['total_views'];
+        $sidebarStats['total_articles'] = (int)$as['total'];
+        $sidebarStats['published'] = (int)$as['published'];
+        $sidebarStats['drafts'] = (int)$as['drafts'];
+        $sidebarStats['total_views'] = (int)$as['total_views'];
     }
     
     $stmt = db()->prepare("
@@ -43,7 +44,7 @@ try {
         WHERE a.author_id = ? AND c.status = 'pending'
     ");
     $stmt->execute([$userId]);
-    $stats['pending_comments'] = (int)$stmt->fetchColumn();
+    $sidebarStats['pending_comments'] = (int)$stmt->fetchColumn();
 } catch (Exception $e) {}
 
 // ============================================
@@ -66,21 +67,38 @@ try {
 } catch (Exception $e) {}
 
 // ============================================
-// 💾 STORAGE USAGE
+// 💾 STORAGE USAGE (dengan cache 5 menit)
 // ============================================
 $storageUsedMB = 0;
-try {
-    $uploadPath = __DIR__ . '/../assets/uploads/';
-    if (is_dir($uploadPath)) {
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($uploadPath, RecursiveDirectoryIterator::SKIP_DOTS)
-        );
-        foreach ($iterator as $file) {
-            if ($file->isFile()) $storageUsedMB += $file->getSize();
+$cacheKey = 'storage_usage_cache';
+$cacheTime = 300; // 5 menit
+
+// ✅ Cek apakah cache masih valid
+if (isset($_SESSION[$cacheKey]) && 
+    isset($_SESSION[$cacheKey . '_time']) && 
+    (time() - $_SESSION[$cacheKey . '_time']) < $cacheTime) {
+    $storageUsedMB = $_SESSION[$cacheKey];
+} else {
+    // Hitung ulang jika cache expired
+    try {
+        $uploadPath = __DIR__ . '/../assets/uploads/';
+        if (is_dir($uploadPath)) {
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($uploadPath, RecursiveDirectoryIterator::SKIP_DOTS)
+            );
+            $totalSize = 0;
+            foreach ($iterator as $file) {
+                if ($file->isFile()) $totalSize += $file->getSize();
+            }
+            $storageUsedMB = round($totalSize / 1024 / 1024, 2);
+            
+            // Simpan ke cache
+            $_SESSION[$cacheKey] = $storageUsedMB;
+            $_SESSION[$cacheKey . '_time'] = time();
         }
-        $storageUsedMB = round($storageUsedMB / 1024 / 1024, 2);
-    }
-} catch (Exception $e) {}
+    } catch (Exception $e) {}
+}
+
 $storageLimit = 100;
 $storagePercent = min(100, (int)round(($storageUsedMB / $storageLimit) * 100));
 
@@ -184,18 +202,18 @@ if (!function_exists('timeAgo')) {
         <div class="quick-stats-mini">
             <div class="mini-stat" title="Total Views">
                 <i class="fas fa-eye"></i>
-                <span><?php echo number_format($stats['total_views']); ?></span>
+                <span><?php echo number_format($sidebarStats['total_views']); ?></span>
                 <small>Views</small>
             </div>
             <div class="mini-stat" title="Total Artikel">
                 <i class="fas fa-newspaper"></i>
-                <span><?php echo $stats['total_articles']; ?></span>
+                <span><?php echo $sidebarStats['total_articles']; ?></span>
                 <small>Artikel</small>
             </div>
-            <div class="mini-stat <?php echo $stats['pending_comments'] > 0 ? 'mini-stat-alert' : ''; ?>" 
+            <div class="mini-stat <?php echo $sidebarStats['pending_comments'] > 0 ? 'mini-stat-alert' : ''; ?>" 
                  title="Komentar Pending">
                 <i class="fas fa-comments"></i>
-                <span><?php echo $stats['pending_comments']; ?></span>
+                <span><?php echo $sidebarStats['pending_comments']; ?></span>
                 <small>Pending</small>
             </div>
         </div>
@@ -230,9 +248,9 @@ if (!function_exists('timeAgo')) {
                 <a href="<?php echo url('admin/articles.php'); ?>" class="<?php echo $isAct('articles.php'); ?>">
                     <div class="nav-icon"><i class="fas fa-newspaper"></i></div>
                     <span class="nav-text">Artikel Saya</span>
-                    <?php if ($stats['drafts'] > 0): ?>
-                        <span class="nav-badge badge-warning" title="<?php echo $stats['drafts']; ?> draft">
-                            <?php echo $stats['drafts']; ?>
+                    <?php if ($sidebarStats['drafts'] > 0): ?>
+                        <span class="nav-badge badge-warning" title="<?php echo $sidebarStats['drafts']; ?> draft">
+                            <?php echo $sidebarStats['drafts']; ?>
                         </span>
                     <?php endif; ?>
                 </a>
@@ -245,9 +263,9 @@ if (!function_exists('timeAgo')) {
                 <a href="<?php echo url('admin/comments.php'); ?>" class="<?php echo $isAct('comments.php'); ?>">
                     <div class="nav-icon"><i class="fas fa-comments"></i></div>
                     <span class="nav-text">Komentar</span>
-                    <?php if ($stats['pending_comments'] > 0): ?>
+                    <?php if ($sidebarStats['pending_comments'] > 0): ?>
                         <span class="nav-badge badge-danger pulse">
-                            <?php echo $stats['pending_comments']; ?>
+                            <?php echo $sidebarStats['pending_comments']; ?>
                         </span>
                     <?php endif; ?>
                 </a>
@@ -343,7 +361,7 @@ if (!function_exists('timeAgo')) {
     <!-- ============ WIDGET: STORAGE ============ -->
     <div class="sidebar-widget">
         <div class="widget-title">
-            <i class="fas fa-hdd"></i> Penyimpanan
+            <i class="fas fa-hdd"></i> Penyimpanan Server
         </div>
         <div class="progress-info">
             <span><?php echo $storageUsedMB; ?> MB</span>

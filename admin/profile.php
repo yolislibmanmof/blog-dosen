@@ -19,6 +19,12 @@ if (!$user) {
     redirect('admin/logout.php');
 }
 
+foreach ($user as $key => $value) {
+    if ($value === null) {
+        $user[$key] = '';
+    }
+}
+
 // ============================================
 // 📊 USER STATISTICS
 // ============================================
@@ -88,6 +94,11 @@ try {
 // 💾 HANDLE UPDATE
 // ============================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (empty($_POST['csrf_token']) || !verifyCsrfToken($_POST['csrf_token'])) {
+        flash('error', '❌ Sesi keamanan tidak valid. Silakan refresh halaman dan coba lagi.');
+        redirect('admin/profile.php');
+    }
+
     try {
         $action = $_POST['action'] ?? 'update_profile';
         
@@ -147,10 +158,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (function_exists('uploadImage')) {
                     $uploaded = uploadImage($file, 'profiles');
                     if ($uploaded) {
-                        // Hapus foto lama jika bukan default
+                        // ✅ Hapus foto lama dengan validasi path (Cegah Path Traversal)
                         if (!empty($user['foto']) && strpos($user['foto'], 'default.png') === false) {
-                            $oldFile = __DIR__ . '/../' . ltrim($user['foto'], '/');
-                            if (file_exists($oldFile)) {
+                            $oldFile = realpath(__DIR__ . '/../' . ltrim($user['foto'], '/'));
+                            $uploadDir = realpath(__DIR__ . '/../assets/uploads/');
+                            if ($oldFile && $uploadDir && strpos($oldFile, $uploadDir) === 0 && file_exists($oldFile)) {
                                 @unlink($oldFile);
                             }
                         }
@@ -159,11 +171,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             
-            // Handle remove foto
+            // ✅ Handle remove foto dengan validasi path
             if (isset($_POST['remove_foto']) && $_POST['remove_foto'] === '1') {
                 if (!empty($user['foto']) && strpos($user['foto'], 'default.png') === false) {
-                    $oldFile = __DIR__ . '/../' . ltrim($user['foto'], '/');
-                    if (file_exists($oldFile)) {
+                    $oldFile = realpath(__DIR__ . '/../' . ltrim($user['foto'], '/'));
+                    $uploadDir = realpath(__DIR__ . '/../assets/uploads/');
+                    if ($oldFile && $uploadDir && strpos($oldFile, $uploadDir) === 0 && file_exists($oldFile)) {
                         @unlink($oldFile);
                     }
                 }
@@ -179,11 +192,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
             $stmt->execute([$nama, $nip, $jabatan, $prodi, $bio, $foto, $newEmail, $userId]);
             
-            // Update session
-            $_SESSION['user_name'] = $nama;
-            $_SESSION['user_email'] = $newEmail;
-            
-            flash('success', '✅ Profil berhasil diupdate!');
+            // ✅ Validasi apakah ada baris yang benar-benar berubah
+            if ($stmt->rowCount() > 0 || isset($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK) {
+                // Update session agar nama di sidebar/header langsung berubah
+                $_SESSION['user_name'] = $nama;
+                $_SESSION['user_email'] = $newEmail;
+                flash('success', '✅ Profil berhasil diupdate!');
+            } else {
+                flash('info', 'ℹ️ Tidak ada perubahan data yang disimpan.');
+            }
         }
         
         // ===== CHANGE PASSWORD =====
@@ -276,7 +293,14 @@ if (isset($_SERVER['HTTP_USER_AGENT'])) {
     elseif (strpos($ua, 'iPhone') !== false || strpos($ua, 'iPad') !== false) $sessionInfo['os'] = 'iOS';
 }
 
-$avatarUrl = url(ltrim(!empty($user['foto']) ? $user['foto'] : 'assets/uploads/default.png', '/'));
+// ✅ FIX: Cegah URL bertumpuk (http://... + http://...)
+$fotoPath = !empty($user['foto']) ? $user['foto'] : 'assets/uploads/default.png';
+if (strpos($fotoPath, 'http') === 0) {
+    $avatarUrl = $fotoPath; // Sudah URL absolut, gunakan apa adanya
+} else {
+    $avatarUrl = url(ltrim($fotoPath, '/')); // Path relatif, tambahkan BASE_URL
+}
+
 $avatarFallback = 'https://ui-avatars.com/api/?name=' . urlencode($user['nama']) . '&background=1e3a5f&color=fff&size=300';
 $memberDays = floor((time() - strtotime($userStats['member_since'])) / 86400);
 
@@ -1039,6 +1063,7 @@ html[data-theme="dark"] .profile-cover::after {
             <!-- ===== PANEL: PROFILE ===== -->
             <div class="profile-panel active" id="panel-profile">
                 <form method="POST" enctype="multipart/form-data" id="profileForm" autocomplete="off">
+                    <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="update_profile">
                     
                     <!-- Photo Upload -->
@@ -1172,6 +1197,7 @@ html[data-theme="dark"] .profile-cover::after {
             <!-- ===== PANEL: PASSWORD ===== -->
             <div class="profile-panel" id="panel-password">
                 <form method="POST" id="passwordForm" autocomplete="off">
+                    <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="change_password">
                     
                     <div class="form-section">
@@ -1343,6 +1369,7 @@ html[data-theme="dark"] .profile-cover::after {
                             </div>
                             <form method="POST" style="display:inline;" 
                                   onsubmit="return confirmLogoutAll(event)">
+                                <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                                 <input type="hidden" name="action" value="logout_all">
                                 <button type="submit" class="security-action-btn warning">
                                     <i class="fas fa-power-off"></i> Logout Semua
@@ -1441,7 +1468,7 @@ html[data-theme="dark"] .profile-cover::after {
         // Preview
         var reader = new FileReader();
         reader.onload = function(e) {
-            photoPreview.src = e.target.result;
+            if (photoPreview) photoPreview.src = e.target.result;
             if (sidebarAvatar) sidebarAvatar.src = e.target.result;
             if (removeFotoInput) removeFotoInput.value = '0';
         };
