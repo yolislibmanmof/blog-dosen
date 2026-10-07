@@ -243,8 +243,11 @@ $isSearch = ($currentPage === 'search.php');
     <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Open+Sans:wght@300;400;600;700;800&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
     
+    <!-- ✅ Sitemap & RSS untuk SEO -->
+    <link rel="sitemap" type="application/xml" href="<?php echo url('sitemap.xml'); ?>">
+    <link rel="alternate" type="application/rss+xml" title="<?php echo htmlspecialchars(isset($settings['nama_kampus']) ? $settings['nama_kampus'] : 'Blog Dosen'); ?> RSS" href="<?php echo url('rss.xml'); ?>">    
     <style>
         :root {
             --header-primary: #1e3a5f;
@@ -1442,10 +1445,10 @@ if ($isArticlePage):
                 </div>
             <?php endif; ?>
             
-            <?php if ($isLoggedIn && $userInfo): ?>
+<?php if ($isLoggedIn && $userInfo): ?>
                 <div class="user-menu-wrapper">
                     <button class="user-menu-btn" onclick="toggleUserMenu()">
-                        <img src="<?php echo url(ltrim($userInfo['foto'] ? $userInfo['foto'] : 'assets/uploads/default.png', '/')); ?>" 
+                        <img src="<?php echo fotoUrl($userInfo['foto'] ?? ''); ?>" 
                              alt="Avatar"
                              class="user-avatar-small"
                              onerror="this.src='https://ui-avatars.com/api/?name=<?php echo urlencode($userInfo['nama']); ?>&background=1e3a5f&color=fff&size=80'">
@@ -1455,7 +1458,7 @@ if ($isArticlePage):
                     
                     <div class="user-dropdown" id="userDropdown">
                         <div class="user-dropdown-header">
-                            <img src="<?php echo url(ltrim($userInfo['foto'] ? $userInfo['foto'] : 'assets/uploads/default.png', '/')); ?>" 
+                            <img src="<?php echo fotoUrl($userInfo['foto'] ?? ''); ?>" 
                                  alt="Avatar"
                                  class="user-dropdown-avatar"
                                  onerror="this.src='https://ui-avatars.com/api/?name=<?php echo urlencode($userInfo['nama']); ?>&background=fff&color=1e3a5f&size=140'">
