@@ -8,6 +8,12 @@ $userId = $_SESSION['user_id'];
 // 🗑️ HANDLE DELETE (POST METHOD - AMAN!)
 // ============================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    if (empty($_POST['csrf_token']) || !verifyCsrfToken($_POST['csrf_token'])) {
+        flash('error', '❌ Sesi keamanan tidak valid. Silakan refresh halaman dan coba lagi.');
+        header('Location: ' . url('admin/articles.php'));
+        exit;
+    }
+
     try {
         $action = $_POST['action'];
         
@@ -25,7 +31,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         
         // Bulk delete
         elseif ($action === 'bulk_delete' && !empty($_POST['selected_ids'])) {
-            $ids = array_map('intval', $_POST['selected_ids']);
+            $rawIds = is_array($_POST['selected_ids']) ? $_POST['selected_ids'] : explode(',', $_POST['selected_ids']);
+            $ids = array_filter(array_map('intval', $rawIds));
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
             $stmt = db()->prepare("DELETE FROM articles WHERE id IN ($placeholders) AND author_id = ?");
             $stmt->execute(array_merge($ids, [$userId]));
@@ -35,7 +42,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         
         // Bulk status change
         elseif (in_array($action, ['bulk_publish', 'bulk_draft']) && !empty($_POST['selected_ids'])) {
-            $ids = array_map('intval', $_POST['selected_ids']);
+            $rawIds = is_array($_POST['selected_ids']) ? $_POST['selected_ids'] : explode(',', $_POST['selected_ids']);
+            $ids = array_filter(array_map('intval', $rawIds));
             $newStatus = $action === 'bulk_publish' ? 'published' : 'draft';
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
             $stmt = db()->prepare("UPDATE articles SET status = ? WHERE id IN ($placeholders) AND author_id = ?");
@@ -122,14 +130,16 @@ try {
 // ============================================
 $categories = [];
 try {
-    $categories = db()->query("
+    $stmt = db()->prepare("
         SELECT c.id, c.name, COUNT(a.id) as article_count
         FROM categories c
-        LEFT JOIN articles a ON a.category_id = c.id AND a.author_id = $userId
+        LEFT JOIN articles a ON a.category_id = c.id AND a.author_id = ?
         GROUP BY c.id
         HAVING article_count > 0
         ORDER BY c.name ASC
-    ")->fetchAll();
+    ");
+    $stmt->execute([$userId]);
+    $categories = $stmt->fetchAll();
 } catch (Exception $e) {}
 
 // ============================================
@@ -162,7 +172,7 @@ try {
     $stmt = db()->prepare("SELECT COUNT(*) FROM articles a $where");
     $stmt->execute($params);
     $totalFiltered = (int)$stmt->fetchColumn();
-    $totalPages = ceil($totalFiltered / $limit);
+    $totalPages = max(1, ceil($totalFiltered / $limit));
 } catch (Exception $e) { $totalPages = 1; }
 
 // Sorting
@@ -1245,6 +1255,7 @@ html[data-theme="dark"] .page-btn {
         <span class="count"><span id="selectedCount">0</span> dipilih</span>
         <div class="bulk-actions-buttons">
             <form method="POST" class="bulk-form" data-action="bulk_publish" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="bulk_publish">
                 <input type="hidden" name="selected_ids" class="selected-ids-input">
                 <button type="submit" class="bulk-btn">
@@ -1252,6 +1263,7 @@ html[data-theme="dark"] .page-btn {
                 </button>
             </form>
             <form method="POST" class="bulk-form" data-action="bulk_draft" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="bulk_draft">
                 <input type="hidden" name="selected_ids" class="selected-ids-input">
                 <button type="submit" class="bulk-btn">
@@ -1259,6 +1271,7 @@ html[data-theme="dark"] .page-btn {
                 </button>
             </form>
             <form method="POST" class="bulk-form" data-action="bulk_delete" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="bulk_delete">
                 <input type="hidden" name="selected_ids" class="selected-ids-input">
                 <button type="submit" class="bulk-btn danger">
@@ -1424,6 +1437,7 @@ html[data-theme="dark"] .page-btn {
                                         <?php endif; ?>
                                         <form method="POST" style="display:inline;" 
                                               onsubmit="return confirmDelete(event, '<?php echo htmlspecialchars(addslashes($a['title'])); ?>')">
+                                            <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                                             <input type="hidden" name="action" value="delete">
                                             <input type="hidden" name="article_id" value="<?php echo $a['id']; ?>">
                                             <button type="submit" class="action-btn delete" title="Hapus">
@@ -1491,6 +1505,7 @@ html[data-theme="dark"] .page-btn {
                                     <?php endif; ?>
                                     <form method="POST" style="display:inline;"
                                           onsubmit="return confirmDelete(event, '<?php echo htmlspecialchars(addslashes($a['title'])); ?>')">
+                                        <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                                         <input type="hidden" name="action" value="delete">
                                         <input type="hidden" name="article_id" value="<?php echo $a['id']; ?>">
                                         <button type="submit" class="action-btn delete" title="Hapus">
@@ -1548,6 +1563,7 @@ html[data-theme="dark"] .page-btn {
                             <?php endif; ?>
                             <form method="POST" style="display:inline;"
                                   onsubmit="return confirmDelete(event, '<?php echo htmlspecialchars(addslashes($a['title'])); ?>')">
+                                <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                                 <input type="hidden" name="action" value="delete">
                                 <input type="hidden" name="article_id" value="<?php echo $a['id']; ?>">
                                 <button type="submit" class="action-btn delete" title="Hapus">
