@@ -178,7 +178,7 @@ if (!function_exists('timeAgo')) {
     <div class="sidebar-header">
         <div class="user-profile">
             <div class="user-avatar-wrapper">
-                <img src="<?php echo url(ltrim($userInfo['foto'], '/')); ?>" 
+                <img src="<?php echo fotoUrl($userInfo['foto']); ?>" 
                      alt="Avatar" 
                      class="user-avatar"
                      onerror="this.src='https://ui-avatars.com/api/?name=<?php echo urlencode($userInfo['nama']); ?>&background=1e3a5f&color=fff&size=100'">

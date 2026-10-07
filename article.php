@@ -173,7 +173,7 @@ $pageDescription = $article['excerpt'] ?? excerpt(strip_tags($article['content']
 $pageImage = $article['featured_image'] ?? url('assets/uploads/default.png');
 
 // Author info
-$authorAvatar = url(ltrim(!empty($article['author_foto']) ? $article['author_foto'] : 'assets/uploads/default.png', '/'));
+$authorAvatar = fotoUrl($article['author_foto'] ?? '');
 $authorName = $article['author_name'] ?? 'Penulis';
 $authorJabatan = $article['jabatan'] ?? 'Dosen';
 $authorProdi = $article['prodi'] ?? '';

@@ -1,66 +1,96 @@
 <?php
 $settings = getSettings();
 $isLoggedIn = isLoggedIn();
-$currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') 
-              . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+
+// ✅ FIX: Canonical URL tanpa query string
+$baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') 
+           . '://' . $_SERVER['HTTP_HOST'];
+$currentUrl = $baseUrl . $_SERVER['REQUEST_URI'];
+$canonicalUrl = $baseUrl . strtok($_SERVER['REQUEST_URI'], '?'); // Hapus query string
+
 $pageTitleFinal = isset($pageTitle) ? $pageTitle : 'Beranda';
 $pageDescription = isset($pageDescription) ? $pageDescription : 'Blog Dosen - Platform berbagi ilmu dan pengetahuan dari para dosen ' . (isset($settings['nama_kampus']) ? $settings['nama_kampus'] : '');
+$pageImage = isset($pageImage) ? $pageImage : (isset($settings['logo']) && $settings['logo'] ? fotoUrl($settings['logo']) : $baseUrl . '/assets/uploads/default.png');
 
 // ============================================
-// DATA UNTUK HEADER
+// DATA UNTUK HEADER (dengan cache 5 menit)
 // ============================================
+$cacheKey = 'header_data_cache';
+$cacheTime = 300; // 5 menit
+$headerData = null;
 
-// 1. Kategori dengan jumlah artikel
-$headerCategories = [];
-try {
-    $stmt = db()->query("
-        SELECT c.id, c.name, c.slug, c.description,
-               COUNT(a.id) as article_count
-        FROM categories c
-        LEFT JOIN articles a ON a.category_id = c.id AND a.status = 'published'
-        GROUP BY c.id
-        ORDER BY article_count DESC, c.name ASC
-        LIMIT 8
-    ");
-    $headerCategories = $stmt->fetchAll();
-} catch (Exception $e) {}
+// Cek cache
+if (isset($_SESSION[$cacheKey]) && 
+    isset($_SESSION[$cacheKey . '_time']) && 
+    (time() - $_SESSION[$cacheKey . '_time']) < $cacheTime) {
+    $headerData = $_SESSION[$cacheKey];
+}
 
-// 2. Artikel trending
-$trendingArticles = [];
-try {
-    $stmt = db()->query("
-        SELECT a.id, a.title, a.slug, a.views, a.featured_image,
-               u.nama as author_name
-        FROM articles a
-        JOIN users u ON a.author_id = u.id
-        WHERE a.status = 'published'
-        ORDER BY a.views DESC
-        LIMIT 5
-    ");
-    $trendingArticles = $stmt->fetchAll();
-} catch (Exception $e) {}
+if (!$headerData) {
+    $headerData = [
+        'categories' => [],
+        'trending' => [],
+        'latest' => [],
+        'stats' => ['articles' => 0, 'authors' => 0, 'views' => 0]
+    ];
+    
+    // 1. Kategori dengan jumlah artikel
+    try {
+        $stmt = db()->query("
+            SELECT c.id, c.name, c.slug, c.description,
+                   COUNT(a.id) as article_count
+            FROM categories c
+            LEFT JOIN articles a ON a.category_id = c.id AND a.status = 'published'
+            GROUP BY c.id
+            ORDER BY article_count DESC, c.name ASC
+            LIMIT 8
+        ");
+        $headerData['categories'] = $stmt->fetchAll();
+    } catch (Exception $e) {}
+    
+    // 2. Artikel trending
+    try {
+        $stmt = db()->query("
+            SELECT a.id, a.title, a.slug, a.views, a.featured_image,
+                   u.nama as author_name
+            FROM articles a
+            JOIN users u ON a.author_id = u.id
+            WHERE a.status = 'published'
+            ORDER BY a.views DESC
+            LIMIT 5
+        ");
+        $headerData['trending'] = $stmt->fetchAll();
+    } catch (Exception $e) {}
+    
+    // 3. Artikel terbaru
+    try {
+        $stmt = db()->query("
+            SELECT a.title, a.slug, a.created_at, u.nama as author_name
+            FROM articles a
+            JOIN users u ON a.author_id = u.id
+            WHERE a.status = 'published'
+            ORDER BY a.created_at DESC
+            LIMIT 5
+        ");
+        $headerData['latest'] = $stmt->fetchAll();
+    } catch (Exception $e) {}
+    
+    // 4. Total statistik
+    try {
+        $headerData['stats']['articles'] = db()->query("SELECT COUNT(*) FROM articles WHERE status='published'")->fetchColumn();
+        $headerData['stats']['authors'] = db()->query("SELECT COUNT(*) FROM users WHERE status='active'")->fetchColumn();
+        $headerData['stats']['views'] = db()->query("SELECT IFNULL(SUM(views), 0) FROM articles")->fetchColumn();
+    } catch (Exception $e) {}
+    
+    // Simpan ke cache
+    $_SESSION[$cacheKey] = $headerData;
+    $_SESSION[$cacheKey . '_time'] = time();
+}
 
-// 3. Artikel terbaru
-$latestArticles = [];
-try {
-    $stmt = db()->query("
-        SELECT a.title, a.slug, a.created_at, u.nama as author_name
-        FROM articles a
-        JOIN users u ON a.author_id = u.id
-        WHERE a.status = 'published'
-        ORDER BY a.created_at DESC
-        LIMIT 5
-    ");
-    $latestArticles = $stmt->fetchAll();
-} catch (Exception $e) {}
-
-// 4. Total statistik
-$totalStats = ['articles' => 0, 'authors' => 0, 'views' => 0];
-try {
-    $totalStats['articles'] = db()->query("SELECT COUNT(*) FROM articles WHERE status='published'")->fetchColumn();
-    $totalStats['authors'] = db()->query("SELECT COUNT(*) FROM users WHERE status='active'")->fetchColumn();
-    $totalStats['views'] = db()->query("SELECT IFNULL(SUM(views), 0) FROM articles")->fetchColumn();
-} catch (Exception $e) {}
+$headerCategories = $headerData['categories'];
+$trendingArticles = $headerData['trending'];
+$latestArticles = $headerData['latest'];
+$totalStats = $headerData['stats'];
 
 // 5. Notifikasi untuk user
 $notifications = [];
@@ -177,14 +207,30 @@ $isSearch = ($currentPage === 'search.php');
     <meta name="keywords" content="blog dosen, <?php echo htmlspecialchars(isset($settings['nama_kampus']) ? $settings['nama_kampus'] : ''); ?>, artikel ilmiah, pendidikan, penelitian">
     <meta name="author" content="<?php echo htmlspecialchars(isset($settings['nama_kampus']) ? $settings['nama_kampus'] : 'Blog Dosen'); ?>">
     <meta name="robots" content="index, follow">
-    <link rel="canonical" href="<?php echo htmlspecialchars($currentUrl); ?>">
+    <link rel="canonical" href="<?php echo htmlspecialchars($canonicalUrl); ?>">
+    
+    <!-- ✅ Schema.org untuk SEO Akademik -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "<?php echo htmlspecialchars(isset($settings['nama_kampus']) ? $settings['nama_kampus'] : 'Blog Dosen'); ?>",
+        "url": "<?php echo htmlspecialchars($baseUrl); ?>",
+        "potentialAction": {
+            "@type": "SearchAction",
+            "target": "<?php echo htmlspecialchars($baseUrl); ?>/search.php?q={search_term_string}",
+            "query-input": "required name=search_term_string"
+        }
+    }
+    </script>
     
     <meta property="og:type" content="website">
     <meta property="og:title" content="<?php echo htmlspecialchars($pageTitleFinal); ?>">
     <meta property="og:description" content="<?php echo htmlspecialchars(excerpt($pageDescription, 200)); ?>">
-    <meta property="og:url" content="<?php echo htmlspecialchars($currentUrl); ?>">
+    <meta property="og:url" content="<?php echo htmlspecialchars($canonicalUrl); ?>">
     <meta property="og:site_name" content="<?php echo htmlspecialchars(isset($settings['nama_kampus']) ? $settings['nama_kampus'] : 'Blog Dosen'); ?>">
     <meta property="og:locale" content="id_ID">
+    <meta property="og:image" content="<?php echo htmlspecialchars($pageImage); ?>">
     
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="<?php echo htmlspecialchars($pageTitleFinal); ?>">
@@ -1164,6 +1210,11 @@ $isSearch = ($currentPage === 'search.php');
 </head>
 <body>
 
+<?php 
+// ✅ Hanya tampilkan preloader & reading progress di halaman artikel
+$isArticlePage = basename($_SERVER['PHP_SELF']) === 'article.php';
+if ($isArticlePage): 
+?>
 <div class="preloader" id="preloader">
     <div class="preloader-icon">🎓</div>
     <div class="preloader-text">BLOG DOSEN</div>
@@ -1171,6 +1222,7 @@ $isSearch = ($currentPage === 'search.php');
 </div>
 
 <div class="reading-progress" id="readingProgress"></div>
+<?php endif; ?>
 
 <?php if ($msg = flash('success')): ?>
     <div class="alert alert-success"><i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($msg); ?></div>

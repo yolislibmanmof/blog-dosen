@@ -85,7 +85,7 @@ try {
 $adminNotifTotal = $adminPending + $adminDrafts;
 
 // Avatar
-$adminAvatarUrl = url(ltrim(!empty($adminUser['foto']) ? $adminUser['foto'] : 'assets/uploads/default.png', '/'));
+$adminAvatarUrl = fotoUrl($adminUser['foto'] ?? '');
 $adminAvatarFallback = 'https://ui-avatars.com/api/?name=' . urlencode($adminUser['nama']) . '&background=1e3a5f&color=fff&size=80';
 $adminFirstName = explode(' ', $adminUser['nama'])[0];
 

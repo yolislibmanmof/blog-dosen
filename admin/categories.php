@@ -11,6 +11,11 @@ if (!isAdmin()) {
 // 🔒 HANDLE POST ACTIONS (AMAN!)
 // ============================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    if (empty($_POST['csrf_token']) || !verifyCsrfToken($_POST['csrf_token'])) {
+        flash('error', '❌ Sesi keamanan tidak valid. Silakan refresh halaman dan coba lagi.');
+        redirect('admin/categories.php');
+    }
+
     try {
         $action = $_POST['action'];
         
@@ -51,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $check = db()->prepare("SELECT id FROM categories WHERE name = ?");
             $check->execute([$name]);
             if ($check->fetch()) {
-                throw new Exception('Kategori dengan nama "' . htmlspecialchars($name) . '" sudah ada!');
+                throw new Exception('Kategori dengan nama "' . $name . '" sudah ada!');
             }
             
             // Cek kolom icon & color (fallback kalau belum ada)
@@ -70,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt->execute([$name, $slug, $desc]);
             }
             
-            flash('success', '✅ Kategori "' . htmlspecialchars($name) . '" berhasil ditambahkan!');
+            flash('success', '✅ Kategori "' . $name . '" berhasil ditambahkan!');
         }
         
         // ===== EDIT CATEGORY =====
@@ -90,23 +95,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $color = '#3498db';
             }
             
+            // ✅ Ambil slug lama agar URL publik tidak berubah saat edit
+            $oldStmt = db()->prepare("SELECT slug FROM categories WHERE id = ?");
+            $oldStmt->execute([$id]);
+            $oldCat = $oldStmt->fetch();
+            if (!$oldCat) {
+                throw new Exception('Kategori tidak ditemukan!');
+            }
+            
             // Cek duplikasi nama (kecuali diri sendiri)
             $check = db()->prepare("SELECT id FROM categories WHERE name = ? AND id != ?");
             $check->execute([$name, $id]);
             if ($check->fetch()) {
-                throw new Exception('Kategori dengan nama "' . htmlspecialchars($name) . '" sudah ada!');
+                throw new Exception('Kategori dengan nama "' . $name . '" sudah ada!');
             }
             
-            // Generate unique slug
-            $baseSlug = !empty($customSlug) ? slugify($customSlug) : slugify($name);
-            $slug = $baseSlug;
-            $counter = 1;
-            while (true) {
-                $check = db()->prepare("SELECT id FROM categories WHERE slug = ? AND id != ?");
-                $check->execute([$slug, $id]);
-                if (!$check->fetch()) break;
-                $counter++;
-                $slug = $baseSlug . '-' . $counter;
+            // ✅ Slug tetap, kecuali admin benar-benar mengetik slug baru
+            if (empty($customSlug) || $customSlug === $oldCat['slug']) {
+                $slug = $oldCat['slug'];
+            } else {
+                $baseSlug = slugify($customSlug);
+                $slug = $baseSlug;
+                $counter = 1;
+                while (true) {
+                    $check = db()->prepare("SELECT id FROM categories WHERE slug = ? AND id != ?");
+                    $check->execute([$slug, $id]);
+                    if (!$check->fetch()) break;
+                    $counter++;
+                    $slug = $baseSlug . '-' . $counter;
+                }
             }
             
             // Update dengan fallback
@@ -123,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt->execute([$name, $slug, $desc, $id]);
             }
             
-            flash('success', '✅ Kategori "' . htmlspecialchars($name) . '" berhasil diupdate!');
+            flash('success', '✅ Kategori "' . $name . '" berhasil diupdate!');
         }
         
         // ===== DELETE CATEGORY =====
@@ -156,7 +173,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         
         // ===== BULK DELETE =====
         elseif ($action === 'bulk_delete' && !empty($_POST['selected_ids'])) {
-            $ids = array_map('intval', $_POST['selected_ids']);
+            $rawIds = is_array($_POST['selected_ids']) ? $_POST['selected_ids'] : explode(',', $_POST['selected_ids']);
+            $ids = array_filter(array_map('intval', $rawIds));
+            if (empty($ids)) {
+                throw new Exception('Tidak ada kategori yang dipilih.');
+            }
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
             
             // Pindahkan artikel terkait ke NULL dulu
@@ -1019,6 +1040,7 @@ html[data-theme="dark"] .cat-card-stat .value { color: #e5e8ec; }
             </div>
             
             <form method="POST" id="categoryForm" autocomplete="off">
+                <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="add" id="formAction">
                 <input type="hidden" name="id" value="" id="formId">
                 
@@ -1121,6 +1143,7 @@ html[data-theme="dark"] .cat-card-stat .value { color: #e5e8ec; }
                 <span class="count"><span id="bulkCount">0</span> dipilih</span>
                 <form method="POST" style="display:inline;" id="bulkForm" 
                       onsubmit="return confirmBulkDelete(event)">
+                    <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="bulk_delete">
                     <button type="submit" class="bulk-btn">
                         <i class="fas fa-trash"></i> Hapus Terpilih
@@ -1214,6 +1237,7 @@ html[data-theme="dark"] .cat-card-stat .value { color: #e5e8ec; }
                                 </a>
                                 <form method="POST" style="flex:1;" 
                                       onsubmit="return confirmDeleteCat(event, '<?php echo htmlspecialchars(addslashes($cat['name'])); ?>', <?php echo (int)$cat['article_count']; ?>)">
+                                    <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="id" value="<?php echo $cat['id']; ?>">
                                     <button type="submit" class="cat-action-btn delete">
@@ -1291,6 +1315,7 @@ html[data-theme="dark"] .cat-card-stat .value { color: #e5e8ec; }
                                             </a>
                                             <form method="POST" style="display:inline;"
                                                   onsubmit="return confirmDeleteCat(event, '<?php echo htmlspecialchars(addslashes($cat['name'])); ?>', <?php echo (int)$cat['article_count']; ?>)">
+                                                <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
                                                 <input type="hidden" name="action" value="delete">
                                                 <input type="hidden" name="id" value="<?php echo $cat['id']; ?>">
                                                 <button type="submit" class="cat-action-btn delete" 

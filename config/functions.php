@@ -22,6 +22,19 @@ function asset($path) {
     return url('assets/' . ltrim($path, '/'));
 }
 
+// ✅ HELPER GLOBAL: Render URL foto/gambar dengan aman
+// Mencegah URL bertumpuk (http://... + http://...) jika nilai di database
+// sudah berupa URL absolut hasil dari uploadImage()
+function fotoUrl($path, $default = 'assets/uploads/default.png') {
+    if (empty($path)) {
+        return url($default);
+    }
+    if (strpos($path, 'http') === 0 || strpos($path, '//') === 0) {
+        return $path; // Sudah URL absolut, gunakan apa adanya
+    }
+    return url(ltrim($path, '/')); // Path relatif, tambahkan BASE_URL
+}
+
 function getSettings() {
     static $settings = null;
     if ($settings === null) {
@@ -45,7 +58,8 @@ function slugify($text) {
     $text = preg_replace('~[^-\w]+~', '', $text);
     $text = trim($text, '-');
     $text = preg_replace('~-+~', '-', $text);
-    return strtolower($text) . '-' . time();
+    $text = strtolower($text);
+    return $text !== '' ? $text : 'slug-' . time();
 }
 
 function isLoggedIn() {

@@ -1345,7 +1345,7 @@ include __DIR__ . '/includes/header.php';
                             <?= htmlspecialchars(excerpt($article['content'], 120)) ?>
                         </p>
                         <div class="featured-author">
-                            <img src="<?= url(ltrim(!empty($article['author_foto']) ? $article['author_foto'] : 'assets/uploads/default.png', '/')) ?>" 
+                            <img src="<?= fotoUrl($article['author_foto'] ?? '') ?>" 
                                  onerror="this.src='https://ui-avatars.com/api/?name=<?= urlencode($article['author_name']) ?>&background=1e3a5f&color=fff&size=80'"
                                  alt="<?= htmlspecialchars($article['author_name']) ?>">
                             <div class="featured-author-info">
@@ -1481,7 +1481,7 @@ include __DIR__ . '/includes/header.php';
             <?php foreach ($topAuthors as $index => $author): 
                 $rank = $index + 1;
                 $rankClass = $rank <= 3 ? 'rank-' . $rank : 'rank-other';
-                $avatarUrl = url(ltrim(!empty($author['foto']) ? $author['foto'] : 'assets/uploads/default.png', '/'));
+                $avatarUrl = fotoUrl($author['foto'] ?? '');
             ?>
                 <div class="author-card">
                     <div class="author-rank <?= $rankClass ?>">#<?= $rank ?></div>
@@ -1628,7 +1628,7 @@ include __DIR__ . '/includes/header.php';
             
             <div class="blog-grid-ultimate">
                 <?php foreach ($articles as $article): 
-                    $avatarUrl = url(ltrim(!empty($article['author_foto']) ? $article['author_foto'] : 'assets/uploads/default.png', '/'));
+                    $avatarUrl = fotoUrl($article['author_foto'] ?? '');
                 ?>
                     <article class="blog-card-ultimate">
                         <div class="blog-image-ultimate" style="background-image: url('<?= htmlspecialchars($article['featured_image'] ?: 'https://images.unsplash.com/photo-1499209974431-9dddcece7f88?w=400') ?>');"></div>
