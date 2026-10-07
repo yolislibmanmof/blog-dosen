@@ -195,6 +195,7 @@ $streakData = [];
 $currentStreak = 0;
 $longestStreak = 0;
 $totalWritingDays = 0;
+$writingDates = []; 
 
 try {
     $stmt = db()->prepare("
@@ -247,7 +248,9 @@ try {
         $date = date('Y-m-d', strtotime("-$i days"));
         $streakData[$date] = in_array($date, $writingDates) ? 1 : 0;
     }
-} catch (Exception $e) {}
+} catch (Exception $e) {
+    $writingDates = []; 
+}
 
 // ============================================
 // 💬 KOMENTAR TERBARU
@@ -1560,7 +1563,7 @@ html[data-theme="dark"] .quick-action-card {
             <div class="welcome-text">
                 <h1>
                     <?php echo $greetingEmoji; ?> <?php echo $greeting; ?>, 
-                    <?php echo htmlspecialchars(explode(' ', $userName)[0]); ?>!
+                    <?php echo htmlspecialchars(!empty($userName) ? explode(' ', $userName)[0] : 'Dosen'); ?>!
                 </h1>
                 <p><?php echo $greetingMsg; ?></p>
             </div>

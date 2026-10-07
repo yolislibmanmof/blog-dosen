@@ -3,7 +3,11 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/database.php';
 
 function db() {
-    return (new Database())->getConnection();
+    static $conn = null;
+    if ($conn === null) {
+        $conn = (new Database())->getConnection();
+    }
+    return $conn;
 }
 
 // Helper URL yang lebih robust
